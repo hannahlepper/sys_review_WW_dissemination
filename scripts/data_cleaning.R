@@ -3,11 +3,11 @@ library(googlesheets4)
 library(plyr)
 library(tidyverse)
 
-all_data <- read_sheet("https://docs.google.com/spreadsheets/d/1LOTMaRQcuLLI9xlRHSwY_4x5u3swEWdHNgfTyVwfgs0/edit#gid=0")
-partial_data <- read_sheet("https://docs.google.com/spreadsheets/d/1HudnB7Y_SBI5zrDhx0_jDvY0KHfqhyygpSQzIwd-FRg/edit#gid=0") %>%
-    subset(., TODO == "Include")
+all_data <- read_sheet("https://docs.google.com/spreadsheets/d/1RO2Zkydw2MyuFRNoLIWFVXD3iQH5U4lLP99v4I_ouXk/edit#gid=0")
 ab_groups <- read_csv("data/ATC_tables.csv") %>%
     subset(., !(Level_5 == "Antibiotics")) #website scraped in a previous project
+
+all_data <- subset(all_data, !(is.na(title)))
 
 #study id
 study_id <- paste0(word(all_data$author, 1), "_", 
@@ -17,12 +17,7 @@ study_id <- paste0(word(all_data$author, 1), "_",
     gsub(",|-| |[.]|?", "", .)
 all_data$study_id <- study_id
 
-partial_study_id <- paste0(word(partial_data$Author, 1), "_", 
-                   word(partial_data$Title, 1), "_", 
-                   word(partial_data$Title, -1), "_", 
-                   partial_data$Year) %>%
-    gsub(",|-| |[.]|?", "", .)
-partial_data$study_id <- partial_study_id
+all_data <- subset(all_data, !(is.na(study_id)))
 
 #antibiotics simplified to ATC level 4
 #Some antibiotics that were often used but need a special case
@@ -49,6 +44,7 @@ special_abs <- function(ab_vec) {
         ab_vec %in% c("co-amoxiclav", "coamoxiclav") ~ "amoxicillin",
         TRUE ~ ab_vec 
     )
+
     return(ab_vec)
 }
 
@@ -70,20 +66,46 @@ match_to_cat <- function(ab_vec) {
 
     other_groups <- case_when(
         ab_vec == "esbl" ~ "ESBL", 
-        ab_vec %in% c("macrolide", "macrolides") ~ "Macrolides",
-        ab_vec %in% c("sulfonamide", "sulfonamides") ~ "Sulfonamides",
+
+        ab_vec %in% c("macrolide", "macrolides", "tylosine", "tylosin") ~ "Macrolides",
+
+        ab_vec %in% c("sulfonamide", "sulfonamides", "sulfamerazin", "sulfisoxazole") ~ "Sulfonamides",
+
         ab_vec %in% c("beta", "lactams", "lactamase", "lactamases") ~ "Beta lactams",
+
         ab_vec %in% c("carbapenems", "carbapenem") ~ "Carbapenems",
+
         ab_vec %in% c("penicillin", "penicillins") ~ "Penicillins",
+
         ab_vec %in% c("fluoroquinolone", "fluoroquinolones") ~ "Quinolones",
+
         ab_vec %in% c("quinolone", "quinolones") ~ "Quinolones",
+
         ab_vec %in% c("aminoglycoside", "aminoglycosides") ~ "Aminoglycosides",
+
         ab_vec %in% c("lincosamide", "lincosamides") ~ "Lincosamides",
-        ab_vec %in% c("streptogramin", "streptogramins", "dalfopristin", "quinupristin") ~ "Streptogramins",
+
+        ab_vec %in% c("streptogramin", "streptogramins", "dalfopristin", "quinupristin", "virginiamycin") ~ "Streptogramins",
+
         ab_vec %in% c("rifampicin", "rifampin") ~ "TB antibiotics",
+
         ab_vec %in% c("all") ~ "All (WGS, MG, large PCR panel)",
-        TRUE ~ ""
+
+        ab_vec %in% c("secondgencephalosporins", "cefuroxime") ~ "Second-Generation Cephalosporins",
+
+        ab_vec %in% c("thirdgencephalosporins", "cefpodoxime", "ceftiofur")  ~ "Third-Generation Cephalosporins",
+
+        ab_vec %in% c("furazolidone") ~ "Nitrofuran derivatives",
+
+        ab_vec %in% c("polymixin", "polymyxin") ~ "Polymixin",
+
+        ab_vec %in% c("ceftaroline") ~ "Other cephalosporins and penems",
+
+        ab_vec %in% c("oleomycin", "avilamycin", "sulfazoritrim", "monensin") ~ "No ATC group found",
+
+       TRUE ~ ""
     )
+    
     unmatched <- which(sapply(1:length(ab_vec), function(a) {
         all(!(str_detect(ab_vec[a], ab_groups$AB_name)) 
                     & !(str_detect(ab_vec[a], ab_groups$Level_4)) 
@@ -137,6 +159,3 @@ org_study_id <- lapply(1:nrow(org_only), function(i) {
             as.numeric(unlist(sapply(all_orgs, function(n) n %in% orgs))))
         data.frame(t(out))
 }) %>% bind_rows %>% setNames(., c("study_id", all_orgs))
-
-
-
